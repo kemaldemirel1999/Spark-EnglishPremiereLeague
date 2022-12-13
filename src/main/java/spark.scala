@@ -1,11 +1,25 @@
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.functions._
+import org.apache.log4j.{Level, Logger}
 
 import Console._
 
+
 object spark {
+
+  import sys.process._
+
+  def callPython(): Unit = {
+    val result = "python3 bigDataPlots.py" ! ProcessLogger(stdout append _, stderr append _)
+    println(result)
+    println("stdout: " + stdout)
+    println("stderr: " + stderr)
+  }
+
   def main(args: Array[String]): Unit = {
+    Logger.getLogger("org.apache.spark").setLevel(Level.ERROR)
+
     print("Hello Spark")
 
     val spark = SparkSession
@@ -30,30 +44,29 @@ object spark {
           "RatioShotsOnTargetPerMatchWhenAway", "TotalShotsWhenAway", "TotalShotsOnTargetWhenAway")
         .sort(desc("RatioShotsOnTargetPerMatchWhenHome"))
 
-      ratioTable.write.option("header", true).format("csv").save("/Users/omerfarukpolat/Spark-EnglishPremiereLeauge/src/main/ratioTable")
+      val path = System.getProperty("user.dir") + "/src/main/ratioTable"
+      ratioTable.write.option("header", true).format("csv").save(path)
 
     }
 
-      def getMostAggresivePlayerAgainstX = (players: DataFrame, opponent: String) => {
-      println("Players with the most cards against ", opponent)
-      players.select("element", "full", "yellow_cards", "red_cards", "opponent_team")
+    def getMostAggresivePlayerAgainstX(players: DataFrame, opponent: String): Dataset[Row] = {
+      return players.select("element", "full", "yellow_cards", "red_cards", "opponent_team")
         .where(col("opponent_team") === opponent and col("yellow_cards") > 0)
         .groupBy("element", "full").agg(sum("yellow_cards").name("totalYellowCards"), sum("red_cards").name("totalRedCards"))
         .sort(desc("totalYellowCards"))
-        .show(false)
     }
 
-    def getMostAggresivePlayer = (players: DataFrame) => {
-      println("Players with the most cards")
-      players.select("element", "full", "yellow_cards", "red_cards", "opponent_team")
+    def getMostAggresivePlayer(players: DataFrame): Dataset[Row] = {
+      //println("Players with the most cards")
+      return players.select("element", "full", "yellow_cards", "red_cards", "opponent_team")
         .where(col("yellow_cards") > 0)
-        .groupBy("element", "full").agg(sum("yellow_cards").name("totalYellowCards"), sum("red_cards")
-        .name("totalRedCards"))
-        .sort(desc("totalYellowCards"))
-        .show(false)
+        .withColumn("totalCard", col("yellow_cards") + col("red_cards"))
+        .groupBy("element", "full").agg(sum("yellow_cards").name("totalYellowCards"), sum("red_cards").name("totalRedCards"),
+        sum("totalCard").as("numOfCards"))
+        .sort(desc("numOfCards"))
     }
 
-    def performanceBetweenTwoWeeks = (players: DataFrame, playerName: String, from: Integer, to: Integer) => {
+    def performanceBetweenTwoWeeks = (players: DataFrame, from: Integer, to: Integer) => {
       val output = players.select("full", "round", "element", "goals_scored", "creativity")
         .where(col("round") >= from
           and col("round") <= to
@@ -64,13 +77,14 @@ object spark {
         .sort(desc("score"))
         .drop("element")
       output.show()
-      val path = System.getProperty("user.dir") + "/src/main/output"
-      output.write.format("csv").save(path)
+
+      val path = System.getProperty("user.dir") + "/src/main/performanceTable"
+      output.write.option("header", true).format("csv").save(path)
 
     }
 
     val maxCard = matches
-      .select("`Referee.x`","`HR.x`","teamId", "`h_a`")
+      .select("`Referee.x`", "`HR.x`", "teamId", "`h_a`")
       .filter("h_a == 'h'")
       .groupBy("`Referee.x`")
       .agg(sum("`HR.x`")
@@ -79,7 +93,7 @@ object spark {
       .collect()(0)
 
     val ev_sahibine_en_cok_kirmizi = matches
-      .select("`Referee.x`","`HR.x`","teamId","`h_a`")
+      .select("`Referee.x`", "`HR.x`", "teamId", "`h_a`")
       .filter("h_a == 'h'")
       .groupBy("`Referee.x`")
       .agg(sum("`HR.x`")
@@ -87,22 +101,23 @@ object spark {
       .filter(col("totalCard") === lit(maxCard(0)))
 
 
-
     val angry_referee = matches
-      .select("`Referee.x`","`HR.x`","`HY.x`","`AY.x`","`AR.x`")
+      .select("`Referee.x`", "`HR.x`", "`HY.x`", "`AY.x`", "`AR.x`")
       .withColumn("totalCard", col("`HR.x`") + col("`HY.x`") + col("`AY.x`") + col("`AR.x`"))
       .groupBy("`Referee.x`")
       .agg(sum("totalCard").as("numOfCards"))
       .orderBy(desc("`numOfCards`"))
       .take(1)
 
-    // println("The Angriest Referee" + angry_referee(0))
-    //  ev_sahibine_en_cok_kirmizi.show()
-    // print(getMostAggresivePlayerAgainstX(players,"Crystal Palace"))
-    // print(getMostAggresivePlayer(players))
+    print(angry_referee)
+    ev_sahibine_en_cok_kirmizi.show()
+    getMostAggresivePlayerAgainstX(players, "Crystal Palace").show()
+    getMostAggresivePlayer(players).show()
 
-    performanceBetweenTwoWeeks(players, "Raheem Sterling", 1, 17)
-    //getShotOnTargetRatios(matches)
+    performanceBetweenTwoWeeks(players, 1, 17)
+    getShotOnTargetRatios(matches)
+
+    callPython()
 
   }
 
