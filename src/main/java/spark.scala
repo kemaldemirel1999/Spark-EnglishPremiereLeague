@@ -17,7 +17,24 @@ object spark {
     val players = spark.read.option("header", true).csv("players_1920_fin.csv")
     val matches = spark.read.option("header", true).csv("epl2020.csv")
 
-    def getMostAggresivePlayerAgainstX = (players: DataFrame, opponent: String) => {
+    def getShotOnTargetRatios = (matches: DataFrame) => {
+      val awayTeamsShots = matches.select("teamId", "`HS.x`", "`HST.x`", "h_a").where(col("h_a") === "a").groupBy(col("teamId")).agg(sum(col("`HS.x`")).name("TotalShotsWhenAway"), sum(col("`HST.x`")).name("TotalShotsOnTargetWhenAway"))
+      // awayTeamsShots.withColumn("RatioShotsOnTargetPerMatchWhenAway", col("TotalShotsOnTargetWhenAway") / col("TotalShotsWhenAway")).show()
+      val homeTeamsShots = matches.select("teamId", "`HS.x`", "`HST.x`", "h_a").where(col("h_a") === "h").groupBy(col("teamId")).agg(sum(col("`HS.x`")).name("TotalShotsWhenHome"), sum(col("`HST.x`")).name("TotalShotsOnTargetWhenHome"))
+      val homeTeamsShotRatios = homeTeamsShots.withColumn("RatioShotsOnTargetPerMatchWhenHome", round(col("TotalShotsOnTargetWhenHome") / col("TotalShotsWhenHome"), 3))
+      val awayTeamsShotRatios = awayTeamsShots.withColumn("RatioShotsOnTargetPerMatchWhenAway", round(col("TotalShotsOnTargetWhenAway") / col("TotalShotsWhenAway"), 3))
+
+      val ratioTable = awayTeamsShotRatios.join(homeTeamsShotRatios, awayTeamsShotRatios("teamId") === homeTeamsShotRatios("teamId"))
+        .drop(homeTeamsShotRatios("teamId"))
+        .select("teamId", "TotalShotsWhenHome", "TotalShotsOnTargetWhenHome", "RatioShotsOnTargetPerMatchWhenHome",
+          "RatioShotsOnTargetPerMatchWhenAway", "TotalShotsWhenAway", "TotalShotsOnTargetWhenAway")
+        .sort(desc("RatioShotsOnTargetPerMatchWhenHome"))
+
+      ratioTable.write.option("header", true).format("csv").save("/Users/omerfarukpolat/Spark-EnglishPremiereLeauge/src/main/ratioTable")
+
+    }
+
+      def getMostAggresivePlayerAgainstX = (players: DataFrame, opponent: String) => {
       println("Players with the most cards against ", opponent)
       players.select("element", "full", "yellow_cards", "red_cards", "opponent_team")
         .where(col("opponent_team") === opponent and col("yellow_cards") > 0)
@@ -47,7 +64,8 @@ object spark {
         .sort(desc("score"))
         .drop("element")
       output.show()
-      output.write.format("csv").save("/Users/omerfarukpolat/Spark-EnglishPremiereLeauge/src/main/output")
+      val path = System.getProperty("user.dir") + "/src/main/output"
+      output.write.format("csv").save(path)
 
     }
 
@@ -84,7 +102,7 @@ object spark {
     // print(getMostAggresivePlayer(players))
 
     performanceBetweenTwoWeeks(players, "Raheem Sterling", 1, 17)
-
+    //getShotOnTargetRatios(matches)
 
   }
 
