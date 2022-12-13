@@ -12,9 +12,6 @@ object spark {
 
   def callPython(): Unit = {
     val result = "python3 bigDataPlots.py" ! ProcessLogger(stdout append _, stderr append _)
-    println(result)
-    println("stdout: " + stdout)
-    println("stderr: " + stderr)
   }
 
   def main(args: Array[String]): Unit = {
@@ -66,6 +63,18 @@ object spark {
         .sort(desc("numOfCards"))
     }
 
+    def getTeamSquads = (matches: DataFrame, players: DataFrame, team: String) => {
+      val playersWithStatistics = players.select("full", "team", "goals_scored", "assists")
+        .groupBy("full", "team")
+        .agg(sum(col("goals_scored")).name("Total Goals"),
+          sum(col("assists")).name("Total Assists"))
+      matches.join(playersWithStatistics, matches("teamId") === players("team"))
+        .filter(col("teamId") === team)
+        .select("teamId", "full", "Total Goals", "Total Assists")
+        .distinct()
+        .sort(desc("Total Goals")).show(100)
+    }
+
     def performanceBetweenTwoWeeks = (players: DataFrame, from: Integer, to: Integer) => {
       val output = players.select("full", "round", "element", "goals_scored", "creativity")
         .where(col("round") >= from
@@ -109,16 +118,17 @@ object spark {
       .orderBy(desc("`numOfCards`"))
       .take(1)
 
-    print(angry_referee)
-    ev_sahibine_en_cok_kirmizi.show()
-    getMostAggresivePlayerAgainstX(players, "Crystal Palace").show()
-    getMostAggresivePlayer(players).show()
+     print(angry_referee)
+     ev_sahibine_en_cok_kirmizi.show()
+     getMostAggresivePlayerAgainstX(players, "Crystal Palace").show()
+     getMostAggresivePlayer(players).show()
+    
+     performanceBetweenTwoWeeks(players, 1, 17)
+     getShotOnTargetRatios(matches)
+    
+     callPython()
 
-    performanceBetweenTwoWeeks(players, 1, 17)
-    getShotOnTargetRatios(matches)
-
-    callPython()
-
+    getTeamSquads(matches, players, "Aston Villa")
   }
 
 }
