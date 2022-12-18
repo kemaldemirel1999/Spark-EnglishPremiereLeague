@@ -15,15 +15,13 @@ object spark {
   }
 
   def main(args: Array[String]): Unit = {
-    Logger.getLogger("org.apache.spark").setLevel(Level.ERROR)
-
-    print("Hello Spark")
 
     val spark = SparkSession
       .builder()
       .appName("kemal")
       .config("spark.master", "local")
       .getOrCreate()
+    spark.sparkContext.setLogLevel("ERROR")
 
     val players = spark.read.option("header", true).csv("players_1920_fin.csv")
     val matches = spark.read.option("header", true).csv("epl2020.csv")
@@ -111,14 +109,19 @@ object spark {
 
 
     val angry_referee = matches
-      .select("`Referee.x`", "`HR.x`", "`HY.x`", "`AY.x`", "`AR.x`")
+      .select("`Referee.x`", "`HR.x`", "`HY.x`", "`AY.x`", "`AR.x`").withColumn("Referees", col("`Referee.x`"))
       .withColumn("totalCard", col("`HR.x`") + col("`HY.x`") + col("`AY.x`") + col("`AR.x`"))
       .groupBy("`Referee.x`")
       .agg(sum("totalCard").as("numOfCards"))
       .orderBy(desc("`numOfCards`"))
-      .take(1)
 
-     print(angry_referee)
+    angry_referee.withColumnRenamed("Referee.x", "Referees")
+
+
+    val refereeTablePath = System.getProperty("user.dir") + "/src/main/refereeTable"
+    angry_referee.write.option("header", true).format("csv").save(refereeTablePath)
+
+     print(angry_referee.show())
      ev_sahibine_en_cok_kirmizi.show()
      getMostAggresivePlayerAgainstX(players, "Crystal Palace").show()
      getMostAggresivePlayer(players).show()
