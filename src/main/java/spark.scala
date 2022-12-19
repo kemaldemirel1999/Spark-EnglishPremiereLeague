@@ -2,6 +2,7 @@ import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.functions._
 import org.apache.log4j.{Level, Logger}
+import org.apache.spark.sql.functions.countDistinct
 
 import Console._
 
@@ -176,21 +177,17 @@ object spark {
         .as("totalCard"))
       .filter(col("totalCard") === lit(maxCard(0)))
 
+    val refereeMatchesCount = matches.groupBy(col("`Referee.x`")).count()
+    val refereeMatchesCountTemp = refereeMatchesCount.withColumn("Referees", col("`Referee.x`")).drop("Referee.x")
+    val temp = matches.withColumn("Referee", col("`Referee.x`")).drop("`Referee.x`")
 
-    val angry_referee = matches
-      .select("`Referee.x`", "`HR.x`", "`HY.x`", "`AY.x`", "`AR.x`").withColumn("Referees", col("`Referee.x`"))
-      .withColumn("totalCard", col("`HR.x`") + col("`HY.x`") + col("`AY.x`") + col("`AR.x`"))
-      .groupBy("`Referee.x`")
-      .agg(sum("totalCard").as("numOfCards"))
-      .orderBy(desc("`numOfCards`"))
-
-    angry_referee.withColumnRenamed("Referee.x", "Referees")
+    val angry_referee = matches.select("`Referee.x`", "`HR.x`", "`HY.x`", "`AY.x`", "`AR.x`").withColumn("totalCard", col("`HR.x`") + col("`HY.x`") + col("`AY.x`") + col("`AR.x`")).groupBy("`Referee.x`").agg(sum("totalCard").as("numOfCards")).orderBy(desc("`numOfCards`")).withColumn("Referee",col("`Referee.x`")).drop("`Referee.x`")
+    angry_referee.join(refereeMatchesCountTemp, angry_referee("Referee") === refereeMatchesCountTemp("Referees")).drop("Referees", "Referee.x").select("count", "Referee", "numOfCards").show()
 
 
     val refereeTablePath = System.getProperty("user.dir") + "/src/main/refereeTable"
     angry_referee.write.option("header", true).format("csv").save(refereeTablePath)
 
-    angry_referee.show()
     mostCardsToHomeTeam.show()
     getMostAggresivePlayerAgainstX(players, "Crystal Palace").show()
     getMostAggresivePlayer(players).show()
