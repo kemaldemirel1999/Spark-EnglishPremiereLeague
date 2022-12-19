@@ -168,7 +168,7 @@ object spark {
       .agg(max("totalCard"))
       .collect()(0)
 
-    val ev_sahibine_en_cok_kirmizi = matches
+    val mostCardsToHomeTeam = matches
       .select("`Referee.x`", "`HR.x`", "teamId", "`h_a`")
       .filter("h_a == 'h'")
       .groupBy("`Referee.x`")
@@ -190,8 +190,8 @@ object spark {
     val refereeTablePath = System.getProperty("user.dir") + "/src/main/refereeTable"
     angry_referee.write.option("header", true).format("csv").save(refereeTablePath)
 
-    print(angry_referee.show())
-    ev_sahibine_en_cok_kirmizi.show()
+    angry_referee.show()
+    mostCardsToHomeTeam.show()
     getMostAggresivePlayerAgainstX(players, "Crystal Palace").show()
     getMostAggresivePlayer(players).show()
 
